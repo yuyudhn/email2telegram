@@ -1,0 +1,119 @@
+import imaplib
+from dataclasses import dataclass
+from email.header import decode_header
+from email.message import Message
+from email import message_from_bytes
+from typing import List, Optional
+
+
+@dataclass
+class EmailMessage:
+    subject: str
+    sender: str
+    body: str
+    folder: str
+    email_id: str
+
+
+def _decode_subject(subject_header: Optional[str]) -> str:
+    if not subject_header:
+        return ""
+    decoded_fragments = decode_header(subject_header)
+    subject = ""
+    for content, encoding in decoded_fragments:
+        if isinstance(content, bytes):
+            try:
+                subject += content.decode(encoding or "utf-8", errors="replace")
+            except LookupError:
+                subject += content.decode("utf-8", errors="replace")
+        else:
+            subject += content
+    return subject
+
+
+def _extract_body(msg: Message) -> str:
+    body = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            content_disposition = str(part.get("Content-Disposition", ""))
+            if content_type == "text/plain" and "attachment" not in content_disposition:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    body += payload.decode("utf-8", errors="replace")
+    else:
+        content_type = msg.get_content_type()
+        if content_type in ("text/plain", "text/html"):
+            payload = msg.get_payload(decode=True)
+            if payload:
+                body = payload.decode("utf-8", errors="replace")
+    return body
+
+
+class IMAPConnectionError(Exception):
+    pass
+
+
+class EmailClient:
+    def __init__(self, config) -> None:
+        self.config = config
+        self._mail: Optional[imaplib.IMAP4_SSL] = None
+
+    def connect(self) -> None:
+        try:
+            self._mail = imaplib.IMAP4_SSL(self.config.imap_server, self.config.imap_port)
+            self._mail.login(self.config.email_address, self.config.email_password.get_secret_value())
+        except Exception as exc:
+            raise IMAPConnectionError(f"Failed to connect/login to IMAP: {exc}") from exc
+
+    def fetch_unread(self, folders: List[str]) -> List[EmailMessage]:
+        messages: List[EmailMessage] = []
+        if self._mail is None:
+            raise IMAPConnectionError("Not connected. Call connect() first.")
+
+        for folder in folders:
+            try:
+                status, _ = self._mail.select(folder)
+                if status != "OK":
+                    continue
+            except Exception:
+                continue
+
+            status, data = self._mail.search(None, "UNSEEN")
+            if status != "OK" or not data or not data[0]:
+                continue
+
+            for email_id in data[0].split():
+                res, msg_data = self._mail.fetch(email_id, "(RFC822)")
+                if res != "OK" or not msg_data or not msg_data[0] or not isinstance(msg_data[0], tuple):
+                    continue
+
+                raw_email = msg_data[0][1]
+                if not isinstance(raw_email, bytes):
+                    continue
+
+                msg = message_from_bytes(raw_email)
+                subject = _decode_subject(msg.get("Subject"))
+                sender = str(msg.get("From", ""))
+                body = _extract_body(msg)
+                messages.append(EmailMessage(subject=subject, sender=sender, body=body, folder=folder, email_id=email_id.decode()))
+
+        return messages
+
+    def mark_seen(self, email_id: str, folder: str) -> None:
+        if self._mail is not None:
+            try:
+                self._mail.select(folder)
+                self._mail.store(email_id, "+FLAGS", "\\Seen")
+            except Exception:
+                pass
+
+    def close(self) -> None:
+        if self._mail is not None:
+            try:
+                self._mail.close()
+                self._mail.logout()
+            except Exception:
+                pass
+            finally:
+                self._mail = None
