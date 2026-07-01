@@ -14,7 +14,7 @@ Meanwhile, I'm already on **Telegram** all day. So I thought... why not just pip
 
 ## How it works
 
-1. **Connects to your IMAP server** — checks `Inbox`, `Spam`, and `Notification` folders every X seconds
+1. **Connects to your IMAP server** — checks the configured folders every X seconds
 2. **Filters unread emails** — only forwards emails whose subject AND body contain your configured keywords
 3. **Formats & sends to Telegram** — strips HTML, escapes entities, truncates long bodies, and delivers a clean message via your bot
 4. **Marks emails as read** — so you don't get spammed with duplicates
@@ -51,13 +51,17 @@ TELEGRAM_CHAT_ID=-1001234567890
 FILTER_SUBJECT=Last War
 FILTER_BODY=Login
 
+IMAP_FOLDERS=inbox,Spam,Notification
+
 CHECK_INTERVAL_SECONDS=30
 LOG_LEVEL=INFO
 HEALTH_CHECK_INTERVAL_SECONDS=3600
 HEALTH_CHECK_TELEGRAM=false
 ```
 
-**Health check:** Set `HEALTH_CHECK_INTERVAL_SECONDS=3600` to log a heartbeat every hour. Set `HEALTH_CHECK_TELEGRAM=true` if you also want a Telegram message confirming the bot is still alive.
+- `IMAP_FOLDERS` — comma-separated list of folders to watch. Case-sensitive on some servers; `INBOX` is the RFC-standard name.
+- `HEALTH_CHECK_INTERVAL_SECONDS` — log heartbeat every N seconds. Set to `0` to disable.
+- `HEALTH_CHECK_TELEGRAM` — set to `true` to also get a Telegram message on each health check.
 
 **Tips:**
 - Use an **app-specific password** (not your main password) if your provider supports it
@@ -107,7 +111,7 @@ python3 -m pytest tests/ -v
 
 - Only handles `text/plain` and basic `text/html` emails (attachments are ignored)
 - HTML tag stripping is regex-based, not a full parser — might munch text with lots of `<` `>` symbols
-- IMAP folder names (`Inbox`, `Spam`, `Notification`) are hardcoded; different providers may use different names
+- Folder names are configurable, but some providers use unexpected names for Spam/Junk
 
 ## License
 

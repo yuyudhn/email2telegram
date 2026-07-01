@@ -16,7 +16,7 @@ class EmailMonitor:
     def __init__(self, config: Config) -> None:
         self.config = config
         self._shutdown_requested = False
-        self._folders = ["inbox", "Spam", "Notification"]
+        self._folders = [f.strip() for f in config.imap_folders.split(",") if f.strip()]
         self._loop_count = 0
         self._last_health_check = 0
 

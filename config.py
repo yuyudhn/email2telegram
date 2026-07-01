@@ -16,6 +16,8 @@ class Config(BaseSettings):
     filter_subject: str = ""
     filter_body: str = ""
 
+    imap_folders: str = "inbox,Spam,Notification"
+
     check_interval_seconds: int = 30
     log_level: str = "INFO"
     health_check_interval_seconds: int = 3600
