@@ -18,3 +18,5 @@ class Config(BaseSettings):
 
     check_interval_seconds: int = 30
     log_level: str = "INFO"
+    health_check_interval_seconds: int = 3600
+    health_check_telegram: bool = False

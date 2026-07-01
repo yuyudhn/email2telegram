@@ -18,6 +18,7 @@ Meanwhile, I'm already on **Telegram** all day. So I thought... why not just pip
 2. **Filters unread emails** — only forwards emails whose subject AND body contain your configured keywords
 3. **Formats & sends to Telegram** — strips HTML, escapes entities, truncates long bodies, and delivers a clean message via your bot
 4. **Marks emails as read** — so you don't get spammed with duplicates
+5. **Auto-reconnects** — if the IMAP connection goes stale (server-side timeout), it reconnects automatically
 
 The bot runs as a simple loop. If it crashes, it restarts. If you hit `Ctrl+C`, it shuts down gracefully.
 
@@ -52,7 +53,11 @@ FILTER_BODY=Login
 
 CHECK_INTERVAL_SECONDS=30
 LOG_LEVEL=INFO
+HEALTH_CHECK_INTERVAL_SECONDS=3600
+HEALTH_CHECK_TELEGRAM=false
 ```
+
+**Health check:** Set `HEALTH_CHECK_INTERVAL_SECONDS=3600` to log a heartbeat every hour. Set `HEALTH_CHECK_TELEGRAM=true` if you also want a Telegram message confirming the bot is still alive.
 
 **Tips:**
 - Use an **app-specific password** (not your main password) if your provider supports it
@@ -80,7 +85,7 @@ sudo journalctl -u email-telegram-bot -f
 email2telegram/
 ├── email2telegram.py       # Main loop & orchestrator
 ├── config.py               # .env loader with Pydantic validation
-├── email_client.py         # IMAP stuff — fetch, parse, mark read
+├── email_client.py         # IMAP stuff — fetch, parse, mark read, reconnect
 ├── telegram_client.py      # Telegram API sender with retry
 ├── filters.py              # Does this email match? (yes/no)
 ├── formatter.py            # Cleans up HTML for Telegram

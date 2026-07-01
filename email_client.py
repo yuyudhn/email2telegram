@@ -66,6 +66,21 @@ class EmailClient:
         except Exception as exc:
             raise IMAPConnectionError(f"Failed to connect/login to IMAP: {exc}") from exc
 
+    def is_connected(self) -> bool:
+        """Check if the IMAP connection is still alive via NOOP."""
+        if self._mail is None:
+            return False
+        try:
+            status, _ = self._mail.noop()
+            return status == "OK"
+        except Exception:
+            return False
+
+    def reconnect(self) -> None:
+        """Close stale connection and reconnect."""
+        self.close()
+        self.connect()
+
     def fetch_unread(self, folders: List[str]) -> List[EmailMessage]:
         messages: List[EmailMessage] = []
         if self._mail is None:
@@ -76,8 +91,8 @@ class EmailClient:
                 status, _ = self._mail.select(folder)
                 if status != "OK":
                     continue
-            except Exception:
-                continue
+            except Exception as exc:
+                raise IMAPConnectionError(f"Failed to select folder {folder}: {exc}") from exc
 
             status, data = self._mail.search(None, "UNSEEN")
             if status != "OK" or not data or not data[0]:

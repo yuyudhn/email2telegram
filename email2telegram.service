@@ -14,10 +14,13 @@ Restart=always
 # Wait 10 seconds before restarting
 RestartSec=10
 
-# Standard output to syslog
-StandardOutput=syslog
-StandardError=syslog
+# Standard output to journald (modern replacement for syslog)
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=email-telegram-bot
+
+# Give the service a little time to start cleanly
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target

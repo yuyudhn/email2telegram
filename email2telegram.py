@@ -5,7 +5,7 @@ import time
 from typing import List
 
 from config import Config
-from email_client import EmailClient
+from email_client import EmailClient, IMAPConnectionError
 from filters import EmailFilter
 from formatter import MessageFormatter
 from logger import setup_logging
@@ -17,6 +17,8 @@ class EmailMonitor:
         self.config = config
         self._shutdown_requested = False
         self._folders = ["inbox", "Spam", "Notification"]
+        self._loop_count = 0
+        self._last_health_check = 0
 
         self.email_client = EmailClient(config)
         self.telegram_client = TelegramClient(
@@ -47,7 +49,9 @@ class EmailMonitor:
 
         try:
             while not self._shutdown_requested:
+                self._loop_count += 1
                 self._check_once()
+                self._maybe_health_check()
                 if not self._shutdown_requested:
                     logging.info("Waiting %s seconds before next check...", self.config.check_interval_seconds)
                     time.sleep(self.config.check_interval_seconds)
@@ -55,11 +59,40 @@ class EmailMonitor:
             self.email_client.close()
             logging.info("Shutdown complete.")
 
+    def _maybe_health_check(self) -> None:
+        if self.config.health_check_interval_seconds <= 0:
+            return
+
+        now = time.time()
+        if now - self._last_health_check < self.config.health_check_interval_seconds:
+            return
+
+        self._last_health_check = now
+        logging.info("Health check: monitor is alive (loops=%s)", self._loop_count)
+
+        if self.config.health_check_telegram:
+            try:
+                self.telegram_client.send("✅ Email2Telegram monitor is alive.")
+            except Exception as exc:
+                logging.error("Health check Telegram notification failed: %s", exc)
+
     def _check_once(self) -> None:
+        # Ensure connection is alive before fetching. If not, reconnect.
+        if not self.email_client.is_connected():
+            logging.warning("IMAP connection lost or stale. Reconnecting...")
+            try:
+                self.email_client.reconnect()
+            except Exception as exc:
+                logging.error("Failed to reconnect to email server: %s", exc)
+                return
+
         try:
             emails = self.email_client.fetch_unread(self._folders)
+        except IMAPConnectionError as exc:
+            logging.error("IMAP connection error during fetch: %s", exc)
+            return
         except Exception as exc:
-            logging.error("Error fetching emails: %s", exc)
+            logging.error("Unexpected error fetching emails: %s", exc)
             return
 
         for email in emails:
